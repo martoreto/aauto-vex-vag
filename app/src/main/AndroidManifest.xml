@@ -1,0 +1,33 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="de.vw.exlap.android">
+
+    <permission
+        android:name="com.github.martoreto.aauto.vex.vag.USE_EXLAP"
+        android:label="@string/permission_label"
+        android:protectionLevel="normal" />
+
+    <uses-permission android:name="com.google.android.gms.permission.CAR_VENDOR_EXTENSION"/>
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        tools:ignore="GoogleAppIndexingWarning">
+
+        <service android:name="com.github.martoreto.aauto.vex.vag.ExlapProxyService" />
+
+        <service android:name="com.github.martoreto.aauto.vex.vag.ExlapSessionService"
+            android:permission="com.github.martoreto.aauto.vex.vag.USE_EXLAP">
+            <intent-filter>
+                <action android:name="com.github.martoreto.aauto.vex.vag.ExlapSessionService"/>
+            </intent-filter>
+        </service>
+
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc"/>
+    </application>
+
+</manifest>
