@@ -1,1 +1,4 @@
 include ':app'
+
+//include ':aauto-vex-base'
+//project(':aauto-vex-base').projectDir = file("../aauto-vex-base")

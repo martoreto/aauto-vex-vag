@@ -2,11 +2,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="de.vw.exlap.android">
 
-    <permission
-        android:name="com.github.martoreto.aauto.vex.vag.USE_EXLAP"
-        android:label="@string/permission_label"
-        android:protectionLevel="normal" />
-
     <uses-permission android:name="com.google.android.gms.permission.CAR_VENDOR_EXTENSION"/>
 
     <application
@@ -16,11 +11,11 @@
         tools:ignore="GoogleAppIndexingWarning">
 
         <service android:name="com.github.martoreto.aauto.vex.vag.ExlapProxyService" />
-
-        <service android:name="com.github.martoreto.aauto.vex.vag.ExlapSessionService"
-            android:permission="com.github.martoreto.aauto.vex.vag.USE_EXLAP">
+        <service android:name="com.github.martoreto.aauto.vex.vag.ExlapSessionService" />
+        <service android:name="com.github.martoreto.aauto.vex.vag.ExlapCarStatsService"
+            android:permission="com.github.martoreto.aauto.vex.BIND_CAR_STATS_PROVIDER">
             <intent-filter>
-                <action android:name="com.github.martoreto.aauto.vex.vag.ExlapSessionService"/>
+                <action android:name="com.github.martoreto.aauto.vex.CAR_STATS_PROVIDER"/>
             </intent-filter>
         </service>
 

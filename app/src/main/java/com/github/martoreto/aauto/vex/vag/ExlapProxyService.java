@@ -5,6 +5,6 @@ import com.github.martoreto.aauto.vex.VexProxyService;
 public class ExlapProxyService extends VexProxyService {
     @Override
     protected String getVendorChannelName() {
-        return "com.vwag.infotainment.gal.exlap";
+        return ExlapReader.EXLAP_VENDOR_CHANNEL_NAME;
     }
 }

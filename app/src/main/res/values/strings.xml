@@ -1,4 +1,3 @@
 <resources>
     <string name="app_name">VAG Extensions for Android Auto</string>
-    <string name="permission_label">Control VAG car</string>
 </resources>
