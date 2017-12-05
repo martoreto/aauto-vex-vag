@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 25
+    compileSdkVersion 26
     buildToolsVersion '26.0.2'
 
     defaultConfig {
@@ -23,7 +23,7 @@ android {
 }
 
 dependencies {
-    compile 'com.github.martoreto:aauto-vex-base:v2.0'
+    compile 'com.github.martoreto:aauto-vex-base:v2.1'
     //compile project(':aauto-vex-base')
     testCompile 'junit:junit:4.12'
 }

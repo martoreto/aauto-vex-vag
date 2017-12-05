@@ -69,12 +69,20 @@ public class ExlapCarStatsService extends Service implements ExlapReader.Listene
     private final IExlapServiceListener mExlapServiceListener = new IExlapServiceListener.Stub() {
         @Override
         public void onConnected() throws RemoteException {
-            mStatsReaderAdapter.startNewSession();
+            try {
+                mStatsReaderAdapter.startNewSession();
+            } catch (Exception e) {
+                Log.e(TAG, "Error handling car connection", e);
+            }
         }
 
         @Override
         public void onDisconnected() throws RemoteException {
-            mStatsReaderAdapter.onDisconnect();
+            try {
+                mStatsReaderAdapter.onDisconnect();
+            } catch (Exception e) {
+                Log.e(TAG, "Error handling car disconnection", e);
+            }
         }
     };
 
@@ -98,6 +106,16 @@ public class ExlapCarStatsService extends Service implements ExlapReader.Listene
         @Override
         public Map getMergedMeasurements() throws RemoteException {
             return mExlapReader.getMergedMeasurements();
+        }
+
+        @Override
+        public boolean needsPermissions() throws RemoteException {
+            return ExlapProxyService.needsPermissions(ExlapCarStatsService.this);
+        }
+
+        @Override
+        public void requestPermissions() throws RemoteException {
+            ExlapProxyService.requestPermissions(ExlapCarStatsService.this);
         }
     };
 

@@ -13,6 +13,7 @@
         <service android:name="com.github.martoreto.aauto.vex.vag.ExlapProxyService" />
         <service android:name="com.github.martoreto.aauto.vex.vag.ExlapSessionService" />
         <service android:name="com.github.martoreto.aauto.vex.vag.ExlapCarStatsService"
+            android:label="@string/app_name"
             android:permission="com.github.martoreto.aauto.vex.BIND_CAR_STATS_PROVIDER">
             <intent-filter>
                 <action android:name="com.github.martoreto.aauto.vex.CAR_STATS_PROVIDER"/>

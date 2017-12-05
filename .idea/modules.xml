@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/../aauto-vex-base/aauto-vex-base.iml" filepath="$PROJECT_DIR$/../aauto-vex-base/aauto-vex-base.iml" />
       <module fileurl="file://$PROJECT_DIR$/aauto-vex-vag.iml" filepath="$PROJECT_DIR$/aauto-vex-vag.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
