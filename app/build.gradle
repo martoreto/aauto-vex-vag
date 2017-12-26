@@ -8,8 +8,8 @@ android {
         applicationId "de.vw.exlap.android"
         minSdkVersion 22
         targetSdkVersion 25
-        versionCode 1000
-        versionName "1.0"
+        versionCode 2000
+        versionName "2.0"
 
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
 
