@@ -20,23 +20,39 @@ import com.github.martoreto.aauto.vex.ICarStatsListener;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ExlapCarStatsService extends Service implements ExlapReader.Listener {
     private static final String TAG = "ExlapCarStatsService";
 
+    private static final int[] SESSION_AUTHS = {
+            ExlapReader.AUTH_RSE_3,
+    };
+
+    private static final String[] SESSION_NAMES = {
+            "stats",
+    };
+
     private IExlapService mExlapSessionService;
     private final Handler mExlapHandler = new Handler();
     private RemoteCallbackList<ICarStatsListener> mListeners = new RemoteCallbackList<>();
-    private final ExlapReaderAdapter mStatsReaderAdapter = new ExlapReaderAdapter("stats");
-    private ExlapReader mExlapReader;
+    private List<ExlapReaderAdapter> mExlapReaderAdapters = new ArrayList<>();
+    private List<ExlapReader> mExlapReaders = new ArrayList<>();
 
     @Override
     public void onCreate() {
         super.onCreate();
 
-        mExlapReader = new ExlapReader(this, mStatsReaderAdapter, ExlapReader.AUTH_STATS);
-        mExlapReader.registerListener(this);
+        for (int i = 0; i < SESSION_AUTHS.length; i++) {
+            ExlapReaderAdapter adapter = new ExlapReaderAdapter(SESSION_NAMES[i]);
+            ExlapReader reader = new ExlapReader(this, adapter, SESSION_AUTHS[i]);
+            reader.registerListener(this);
+            mExlapReaders.add(reader);
+            mExlapReaderAdapters.add(adapter);
+        }
 
         Intent intent = new Intent(this, ExlapSessionService.class);
         bindService(intent, mServiceConnection, Context.BIND_AUTO_CREATE);
@@ -45,7 +61,9 @@ public class ExlapCarStatsService extends Service implements ExlapReader.Listene
     @Override
     public void onDestroy() {
         unbindService(mServiceConnection);
-        mExlapReader.unregisterListener(this);
+        for (ExlapReader r: mExlapReaders) {
+            r.unregisterListener(this);
+        }
         super.onDestroy();
     }
 
@@ -69,19 +87,23 @@ public class ExlapCarStatsService extends Service implements ExlapReader.Listene
     private final IExlapServiceListener mExlapServiceListener = new IExlapServiceListener.Stub() {
         @Override
         public void onConnected() throws RemoteException {
-            try {
-                mStatsReaderAdapter.startNewSession();
-            } catch (Exception e) {
-                Log.e(TAG, "Error handling car connection", e);
+            for (ExlapReaderAdapter adapter: mExlapReaderAdapters) {
+                try {
+                    adapter.startNewSession();
+                } catch (Exception e) {
+                    Log.e(TAG, adapter.mName + ": Error handling car connection", e);
+                }
             }
         }
 
         @Override
         public void onDisconnected() throws RemoteException {
-            try {
-                mStatsReaderAdapter.onDisconnect();
-            } catch (Exception e) {
-                Log.e(TAG, "Error handling car disconnection", e);
+            for (ExlapReaderAdapter adapter: mExlapReaderAdapters) {
+                try {
+                    adapter.onDisconnect();
+                } catch (Exception e) {
+                    Log.e(TAG, adapter.mName + ": Error handling car disconnection", e);
+                }
             }
         }
     };
@@ -105,7 +127,11 @@ public class ExlapCarStatsService extends Service implements ExlapReader.Listene
 
         @Override
         public Map getMergedMeasurements() throws RemoteException {
-            return mExlapReader.getMergedMeasurements();
+            Map<String, Object> result = new HashMap<>();
+            for (ExlapReader r: mExlapReaders) {
+                result.putAll(r.getMergedMeasurements());
+            }
+            return result;
         }
 
         @Override
