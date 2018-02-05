@@ -6,10 +6,10 @@ android {
 
     defaultConfig {
         applicationId "de.vw.exlap.android"
-        minSdkVersion 22
+        minSdkVersion 21
         targetSdkVersion 25
-        versionCode 2100
-        versionName "2.1"
+        versionCode 2200
+        versionName "2.2"
 
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
 
