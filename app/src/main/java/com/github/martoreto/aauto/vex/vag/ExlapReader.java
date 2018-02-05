@@ -53,16 +53,22 @@ public class ExlapReader {
     private static final long CONNECTION_TIMEOUT_MS = 2000;
     private static final long MEASUREMENTS_FLUSH_DELAY_MS = 500;
 
-    public static final int AUTH_STATS = 0;
-    public static final int AUTH_CONTROL = 1;
+    public static final int AUTH_TEST_TB = 0;
+    public static final int AUTH_RSE_L = 1;
+    public static final int AUTH_RSE_3 = 2;
+    public static final int AUTH_ML_74 = 3;
 
     private static final String[] U = {
             "Test_TB-105000",
-            "RSE_L-CA2000"
+            "RSE_L-CA2000",
+            "RSE_3-DE1400",
+            "ML_74-125000",
     };
     private static final String[] P = {
             "s4T2K6BAv0a7LQvrv3vdaUl17xEl2WJOpTmAThpRZe0==",
-            "T53Facvq51jO8vQJrBNx3MqLWmPcHf/hkow7yLu7SuA=="
+            "T53Facvq51jO8vQJrBNx3MqLWmPcHf/hkow7yLu7SuA==",
+            "KozPo8iE0j72pkbWXKcP0QihpxgML3Opp8fNJZ0wN24==",
+            "Fo7arEpPhAgMMznzxRlV8B7eeZgNDIYQcy0Gr7Ad1Fg==",
     };
 
     private static final DateFormat TIMESTAMP_DATE_FORMAT =
