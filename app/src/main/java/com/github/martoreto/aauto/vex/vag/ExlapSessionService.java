@@ -201,7 +201,7 @@ public class ExlapSessionService extends Service {
             return;
         }
         Element root = doc.getDocumentElement();
-        if (!root.hasAttribute("session_id")) {
+        if (root == null || !root.hasAttribute("session_id")) {
             return;
         }
 
