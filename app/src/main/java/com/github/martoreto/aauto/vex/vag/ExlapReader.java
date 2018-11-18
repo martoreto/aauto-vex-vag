@@ -5,9 +5,11 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.util.Base64;
 import android.util.Log;
 
+import org.w3c.dom.Comment;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -74,6 +76,9 @@ public class ExlapReader {
     private static final DateFormat TIMESTAMP_DATE_FORMAT =
             new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSZ", Locale.US);
 
+    private static final int MSG_PUSH_MEASUREMENTS = 0;
+    private static final int MSG_PUSH_SCHEMA = 1;
+
     private static Date parseIsoTimestamp(String isoTimetstamp) throws ParseException {
         String s = isoTimetstamp.replace("Z", "+00:00");
         try {
@@ -91,6 +96,7 @@ public class ExlapReader {
     }
 
     public interface Listener {
+        void onNewSchema(Map<String, MeasurementSchema> schema);
         void onExlapMeasurements(ExlapReader reader, MeasurementsBundle measurements);
     }
 
@@ -117,6 +123,58 @@ public class ExlapReader {
         }
     }
 
+    public static class MeasurementSchema {
+        public enum Type {
+            STRING,
+            INTEGER,
+            FLOAT,
+            BOOLEAN
+        }
+
+        private Type type;
+        private @Nullable String description;
+        private @Nullable String unit;
+        private float min;
+        private float max;
+        private float resolution;
+
+        public MeasurementSchema(Type type, @Nullable String description, @Nullable String unit,
+                                 float min, float max, float resolution) {
+            this.type = type;
+            this.description = description;
+            this.unit = unit;
+            this.min = min;
+            this.max = max;
+            this.resolution = resolution;
+        }
+
+        public Type getType() {
+            return type;
+        }
+
+        @Nullable
+        public String getDescription() {
+            return description;
+        }
+
+        @Nullable
+        public String getUnit() {
+            return unit;
+        }
+
+        public float getMin() {
+            return min;
+        }
+
+        public float getMax() {
+            return max;
+        }
+
+        public float getResolution() {
+            return resolution;
+        }
+    }
+
     private enum State {
         STATE_STOPPED,
         STATE_CONNECTING,
@@ -125,7 +183,7 @@ public class ExlapReader {
         STATE_WAIT_AUTH_CHALLENGE,
         STATE_WAIT_AUTH_RESPONSE,
         STATE_WAIT_URLLIST,
-        STATE_WAIT_INTERFACES,
+        STATE_WAIT_SCHEMA,
         STATE_ACTIVE,
         STATE_FAILED
     }
@@ -135,14 +193,15 @@ public class ExlapReader {
     private String mUsername;
     private String mPassword;
     private Handler mTimingHandler;
-    private Handler mMeasurementsPushHandler;
+    private Handler mListenersHandler;
     private List<Listener> mListeners = new ArrayList<>();
     private List<DebugListener> mDebugListeners = new ArrayList<>();
     private final DocumentBuilderFactory mDocumentBuilderFactory;
     private int mNextId = 0;
     private String mSessionId;
-    private int mNumRemainingInterfaces;
-    private List<String> mUrls;
+    private int mNumRemainingSchemaElements;
+    private List<Element> mObjects;
+    private Map<String, MeasurementSchema> mSchema;
 
     private final Object mMeasurementsLock = new Object();
     private String mCurrentTimestamp;
@@ -184,10 +243,11 @@ public class ExlapReader {
         mPassword = password;
 
         mTimingHandler = new Handler(context.getMainLooper());
-        mMeasurementsPushHandler = new MeasurementsPushHandler(new WeakReference<>(this), context.getMainLooper());
+        mListenersHandler = new ListenersHandler(new WeakReference<>(this), context.getMainLooper());
 
         mDocumentBuilderFactory = DocumentBuilderFactory.newInstance();
-        mDocumentBuilderFactory.setIgnoringComments(true);
+        mDocumentBuilderFactory.setIgnoringComments(false);
+        mDocumentBuilderFactory.setIgnoringElementContentWhitespace(true);
         mDocumentBuilderFactory.setNamespaceAware(false);
         mDocumentBuilderFactory.setValidating(false);
     }
@@ -407,36 +467,46 @@ public class ExlapReader {
                     Element urlList = (Element) root.getElementsByTagName("UrlList").item(0);
                     NodeList matches = urlList.getElementsByTagName("Match");
                     Log.i(TAG, "Discovered " + matches.getLength() + " URLs");
-                    mState = State.STATE_WAIT_INTERFACES;
-                    mNumRemainingInterfaces = matches.getLength();
-                    mUrls = new ArrayList<>(mNumRemainingInterfaces);
+                    mState = State.STATE_WAIT_SCHEMA;
+                    mNumRemainingSchemaElements = matches.getLength();
+                    mObjects = new ArrayList<>(mNumRemainingSchemaElements);
+                    mSchema = new HashMap<>(mNumRemainingSchemaElements * 3);
                     for (int i = 0; i < matches.getLength(); i++) {
                         Element match = (Element) matches.item(i);
                         String url = match.getAttribute("url");
                         sendRequest(String.format(Locale.ROOT, "<Interface url=\"%s\"/>", url));
-                        if (!"function".equals(match.getAttribute("type"))) {
-                            mUrls.add(url);
-                        }
                     }
                 }
                 break;
 
-            case STATE_WAIT_INTERFACES:
+            case STATE_WAIT_SCHEMA:
                 if (root.getTagName().equals("Rsp")) {
                     NodeList children = root.getChildNodes();
+                    String description = null;
                     for (int i = 0; i < children.getLength(); i++) {
                         Node child = children.item(i);
-                        if (child instanceof Element) {
-                            Log.i(TAG, "Interface: " + xmlToString((Element) child));
+                        if (child instanceof Comment) {
+                            String text = ((Comment) child).getData().trim();
+                            if (text.startsWith("@description ")) {
+                                description = text.substring("@description ".length());
+                            }
+                        } else if (child instanceof Element) {
+                            Element interfaceDescription = (Element) child;
+                            handleInterface(interfaceDescription, description);
+                            description = null;
+                            Log.i(TAG, "Interface: " + xmlToString(interfaceDescription));
                         }
                     }
-                    mNumRemainingInterfaces -= 1;
-                    if (mNumRemainingInterfaces == 0) {
+                    mNumRemainingSchemaElements -= 1;
+                    if (mNumRemainingSchemaElements == 0) {
+                        mListenersHandler.sendMessage(
+                                Message.obtain(mListenersHandler, MSG_PUSH_SCHEMA, mSchema));
                         mCurrentTimestamp = null;
                         mCurrentMeasurements = new HashMap<>();
                         mState = State.STATE_ACTIVE;
-                        for (String url: mUrls) {
-                            sendRequest(String.format(Locale.ROOT, "<Subscribe url=\"%s\" timeStamp=\"true\"/>", url));
+                        for (Element o: mObjects) {
+                            sendRequest(String.format(Locale.ROOT, "<Subscribe url=\"%s\" timeStamp=\"true\"/>",
+                                    o.getAttribute("url")));
                         }
                     }
                 }
@@ -474,75 +544,142 @@ public class ExlapReader {
 
     private void handleMeasurementValues(Element dat) {
         String url = dat.getAttribute("url");
-        handleMeasurementChildren(dat, url);
-    }
-
-    private void handleMeasurementChildren(Element dat, String prefix) {
         Node child = dat.getFirstChild();
         while (child != null) {
-            if (child.getNodeType() == Node.ELEMENT_NODE) {
-                handleMeasurementValue((Element) child, prefix);
+            if (child instanceof Element) {
+                handleMeasurementValue((Element) child, url);
             }
             child = child.getNextSibling();
         }
     }
 
-    private void handleMeasurementValue(Element el, String prefix) {
-        String key = prefix;
+    private void handleInterface(Element el, @Nullable String description) {
+        if (el.getTagName().equals("Object")) {
+            String url = el.getAttribute("url");
+            if (url == null) {
+                Log.w(TAG, "Skipping interface without URL");
+                return;
+            }
+            if (description != null) {
+                el.setAttribute("description", description);
+            }
+            mObjects.add(el);
+            NodeList children = el.getChildNodes();
+            for (int i = 0; i < children.getLength(); i++) {
+                Node child = children.item(i);
+                if (child instanceof Element) {
+                    Element member = (Element) child;
+                    String name = member.getAttribute("name");
+                    if (name == null) {
+                        Log.w(TAG, "Skipping member without name");
+                        continue;
+                    }
+                    String key = makeKey(url, name);
+                    MeasurementSchema.Type type = null;
+                    String unit = null;
+                    float min = Float.MIN_VALUE;
+                    float max = Float.MAX_VALUE;
+                    float resolution = 0.0f;
+                    switch (member.getTagName()) {
+                        case "Absolute":
+                        case "Relative":
+                            resolution = Float.valueOf(member.getAttribute("resolution"));
+                            type = MeasurementSchema.Type.FLOAT;
+                            unit = member.getAttribute("unit");
+                            if (unit != null && unit.isEmpty()) {
+                                unit = null;
+                            }
+                            String minString = member.getAttribute("min");
+                            if (minString != null && !minString.equals("INF")) {
+                                try {
+                                    min = Float.parseFloat(minString);
+                                } catch (NumberFormatException e) {
+                                    // do nothing
+                                }
+                            }
+                            String maxString = member.getAttribute("max");
+                            if (maxString != null && !maxString.equals("INF")) {
+                                try {
+                                    max = Float.parseFloat(maxString);
+                                } catch (NumberFormatException e) {
+                                    // do nothing
+                                }
+                            }
+                            break;
+                        case "Activity":
+                            type = MeasurementSchema.Type.BOOLEAN;
+                            break;
+                        case "Text":
+                        case "Time":
+                        case "Enumeration":
+                            type = MeasurementSchema.Type.STRING;
+                            break;
+                        case "Alternative":
+                        case "Binary":
+                        case "ListEntity":
+                        case "ObjectEntity":
+                            Log.w(TAG, "Skipping " + key + ": unsupported type " + member.getTagName());
+                            break;
+                        default:
+                            Log.w(TAG, "Skipping " + key + ": invalid type " + member.getTagName());
+                    }
+                    if (type != null) {
+                        Log.d(TAG, key + ": " + type.name());
+                        mSchema.put(key,
+                                new MeasurementSchema(type, description + " (" + name + ")", unit,
+                                        min, max, resolution));
+                    }
+                }
+            }
+        }
+    }
+
+    private static String makeKey(@NonNull String url, @NonNull String name) {
+        if (name.equals("value") || url.toLowerCase().contains(name.toLowerCase())) {
+            return url;
+        } else {
+            return url + "." + name;
+        }
+
+    }
+
+    private void handleMeasurementValue(Element el, String url) {
         if (!el.hasAttribute("name")) {
             // Well, this should not happen, but better be safe for the future.
             return;
         }
-        String name = el.getAttribute("name");
-        if (!name.equals("value") && !key.toLowerCase().contains(name.toLowerCase())) {
-            key += "." + name;
+        String key = makeKey(url, el.getAttribute("name"));
+        MeasurementSchema ms = mSchema.get(key);
+        if (ms == null) {
+            return;
         }
-        String tag = el.getTagName();
-        switch (tag) {
-            case "Obj":
-                handleMeasurementChildren(el, key);
-                break;
 
-            case "List": {
-                Node elem = el.getFirstChild();
-                int index = 0;
-                while (elem != null) {
-                    if (elem.getNodeType() == Node.ELEMENT_NODE && ((Element) elem).getTagName().equals("Elem")) {
-                        handleMeasurementChildren((Element) elem, key + "." + index);
-                        index += 1;
-                    }
-                    elem = elem.getNextSibling();
-                }
-                break;
-            }
-
-            case "Bin":
-                mCurrentMeasurements.put(key, "binary_not_supported");
-                break;
-
-            default: {
-                Object value = null;
-                if (el.hasAttribute("val")) {
-                    String state = el.getAttribute("state");
-                    String v = el.getAttribute("val");
-                    if (!state.equals("nodata") && !state.equals("error")) {
-                        try {
+        Object value = null;
+        if (el.hasAttribute("val")) {
+            String state = el.getAttribute("state");
+            String v = el.getAttribute("val");
+            if (!state.equals("nodata") && !state.equals("error")) {
+                try {
+                    switch (ms.getType()) {
+                        case FLOAT:
                             value = Float.valueOf(v);
-                        } catch (NumberFormatException e) {
-                            //noinspection IfCanBeSwitch
-                            if (v.equals("true")) {
-                                value = true;
-                            } else if (v.equals("false")) {
-                                value = false;
-                            } else {
-                                value = v;
-                            }
-                        }
+                            break;
+                        case INTEGER:
+                            value = Long.valueOf(v);
+                            break;
+                        case BOOLEAN:
+                            value = Boolean.valueOf(v);
+                            break;
+                        case STRING:
+                            value = v;
+                            break;
                     }
+                } catch (Exception e) {
+                    Log.w(TAG, "Error parsing '" + v + "' for " + key + ": " + e.getMessage());
                 }
-                mCurrentMeasurements.put(key, value);
             }
         }
+        mCurrentMeasurements.put(key, value);
     }
 
     private void scheduleFlushMeasurements() {
@@ -572,30 +709,44 @@ public class ExlapReader {
                 }
             }
             if (bundle != null) {
-                mMeasurementsPushHandler.sendMessage(
-                        Message.obtain(mMeasurementsPushHandler, 0, bundle));
+                mListenersHandler.sendMessage(
+                        Message.obtain(mListenersHandler, MSG_PUSH_MEASUREMENTS, bundle));
             }
         } catch (Exception e) {
             Log.w(TAG, "Throwing out measurements bundle due to error", e);
         }
     }
 
-    private static class MeasurementsPushHandler extends Handler {
+    private static class ListenersHandler extends Handler {
         private WeakReference<ExlapReader> mReader;
 
-        public MeasurementsPushHandler(WeakReference<ExlapReader> mReader, Looper looper) {
+        public ListenersHandler(WeakReference<ExlapReader> mReader, Looper looper) {
             super(looper);
             this.mReader = mReader;
         }
 
         @Override
         public void handleMessage(Message msg) {
-            for (Listener l: mReader.get().mListeners) {
-                try {
-                    l.onExlapMeasurements(mReader.get(), (MeasurementsBundle) msg.obj);
-                } catch (Exception e) {
-                    Log.e(TAG, "Exception from measurements listener", e);
-                }
+            switch (msg.what) {
+                case MSG_PUSH_MEASUREMENTS:
+                    for (Listener l: mReader.get().mListeners) {
+                        try {
+                            l.onExlapMeasurements(mReader.get(), (MeasurementsBundle) msg.obj);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Exception from measurements listener", e);
+                        }
+                    }
+                    break;
+                case MSG_PUSH_SCHEMA:
+                    for (Listener l: mReader.get().mListeners) {
+                        try {
+                            //noinspection unchecked
+                            l.onNewSchema((Map<String, MeasurementSchema>) msg.obj);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Exception from schema listener", e);
+                        }
+                    }
+                    break;
             }
         }
     }
