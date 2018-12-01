@@ -8,8 +8,8 @@ android {
         applicationId "de.vw.exlap.android"
         minSdkVersion 21
         targetSdkVersion 25
-        versionCode 2300
-        versionName "2.3"
+        versionCode 2400
+        versionName "2.4"
 
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
 
@@ -26,7 +26,7 @@ dependencies {
     compile 'com.android.support:support-v4:26.1.0'
     compile 'com.android.support:appcompat-v7:26.1.0'
     compile 'com.android.support:recyclerview-v7:26.1.0'
-    compile 'com.github.martoreto:aauto-vex-base:v4.3'
+    compile 'com.github.martoreto:aauto-vex-base:v4.4'
     //compile project(':aauto-vex-base')
     testCompile 'junit:junit:4.12'
 }
